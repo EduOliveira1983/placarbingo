@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marcador de Bingo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    .firework {
+      position: fixed; width: 8px; height: 8px; border-radius: 50%;
+      background: red; animation: explode 1s ease-out forwards;
+    }
+    @keyframes explode {
+      from { transform: scale(1) translateY(0); opacity: 1; }
+      to { transform: scale(0) translateY(-150px); opacity: 0; }
+    }
+    .fade { transition: opacity .5s ease; }
+  </style>
+</head>
+<body class="bg-neutral-50 text-neutral-900 min-h-dvh flex flex-col">
+  <div class="w-full px-4 py-6 flex flex-col gap-6 flex-grow">
+
+    <!-- Input, tipo de jogo e botões -->
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sticky top-0 bg-neutral-50 z-20 pb-2">
+      
+      <!-- Input -->
+      <div class="flex flex-col gap-1 w-full sm:w-auto">
+        <input id="numberInput" type="number" inputmode="numeric" pattern="[0-9]*"
+               placeholder="Digite o número e pressione Enter"
+               class="w-full sm:w-80 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-lg shadow-sm outline-none transition focus:ring-2 focus:ring-indigo-500"
+               aria-label="Número chamado" />
+        <p id="message" class="text-sm text-red-600 mt-1 h-5 fade"></p>
+      </div>
+
+      <!-- Tipo de jogo -->
+      <div id="gameTypeDisplay" class="text-7xl font-bold text-center flex-1">
+        CARTELA CHEIA
+      </div>
+
+      <!-- Botões -->
+      <div class="flex flex-col items-center gap-1 self-end sm:self-auto">
+        <div class="flex items-center gap-2">
+          <button id="btnConfig" class="control-btn" title="Configurações (C)">C</button>
+          <button id="btnUndo" class="control-btn" title="Desfazer (D)" disabled>D</button>
+          <button id="btnRedo" class="control-btn" title="Refazer (R)" disabled>R</button>
+          <button id="btnClear" class="control-btn" title="Limpar tudo (L)">L</button>
+          <button id="btnBingo" class="px-4 py-2 rounded-xl bg-green-600 text-white font-bold shadow hover:bg-green-700">BINGO!</button>
+        </div>
+        <div class="text-xs text-neutral-600 text-center">
+          C = Configurações | D = Desfazer | R = Refazer | L = Limpar
+        </div>
+      </div>
+    </div>
+
+    <!-- Quadro central -->
+    <section id="board" class="flex-grow rounded-2xl border border-neutral-300 bg-white p-4 shadow-sm flex items-start justify-center overflow-y-auto w-full"></section>
+
+  </div>
+
+  <!-- Rodapé -->
+  <footer class="sticky bottom-0 w-full bg-neutral-100 border-t border-neutral-300 py-4">
+    <div class="grid grid-cols-2 px-6">
+      <div class="flex flex-col items-start overflow-hidden">
+        <p class="text-sm opacity-70">PRÊMIO</p>
+        <div id="prizeDisplay" class="mt-1 text-4xl font-bold tracking-wide truncate max-w-full">—</div>
+      </div>
+      <div class="flex flex-col items-end">
+        <p class="text-sm opacity-70">ÚLTIMA PEDRA</p>
+        <div id="lastCalled" class="mt-1 text-7xl font-extrabold tracking-wide">—</div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modal Configurações -->
+  <div id="settingsModal" class="fixed inset-0 z-50 hidden place-items-center bg-black/50 p-4">
+    <div class="w-full max-w-5xl max-h-[85vh] overflow-auto rounded-2xl bg-white p-6 shadow-xl border border-neutral-200">
+      <div class="flex items-start justify-between gap-3">
+        <h2 class="text-xl font-bold">Configurações</h2>
+        <button id="closeSettings" class="rounded-lg px-3 py-1.5 text-sm bg-neutral-200 hover:bg-neutral-300">Fechar</button>
+      </div>
+
+      <div class="mt-3 flex flex-wrap gap-2">
+        <span class="text-xs opacity-70">Atalhos rápidos:</span>
+        <button type="button" class="preset px-3 py-1.5 text-sm rounded-lg bg-neutral-200 hover:bg-neutral-300" data-word="BINGO">BINGO</button>
+        <button type="button" class="preset px-3 py-1.5 text-sm rounded-lg bg-neutral-200 hover:bg-neutral-300" data-word="AJUDE">AJUDE</button>
+        <button type="button" class="preset px-3 py-1.5 text-sm rounded-lg bg-neutral-200 hover:bg-neutral-300" data-word="AJUDA">AJUDA</button>
+      </div>
+
+      <form id="settingsForm" class="mt-4 flex flex-col gap-4">
+        <div id="letterGrid" class="grid grid-cols-1 gap-3 sm:grid-cols-5"></div>
+
+        <!-- Ordem de chamada -->
+        <div class="flex flex-col gap-1">
+          <label class="inline-flex items-center gap-2">
+            <input type="checkbox" id="orderCheckbox" class="h-4 w-4" checked>
+            <span class="text-sm font-medium">Mostrar em ordem de chamada</span>
+          </label>
+          <p class="text-xs text-neutral-500">Exibir números na sequência em que foram chamados (desmarque para ordem numérica).</p>
+        </div>
+
+        <!-- Tipo de jogo -->
+        <div>
+          <label class="block text-sm font-medium">Tipo de Jogo</label>
+          <select id="gameTypeSelect" class="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-lg shadow-sm focus:ring-2 focus:ring-indigo-500">
+            <option value="CARTELA CHEIA">Cartela Cheia</option>
+            <option value="QUINA">Quina</option>
+          </select>
+        </div>
+
+        <!-- Prêmio -->
+        <div>
+          <label class="block text-sm font-medium">Prêmio</label>
+          <input type="text" id="prizeInput" maxlength="50"
+                 class="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-lg shadow-sm focus:ring-2 focus:ring-indigo-500"
+                 placeholder="Ex: Bicicleta, R$100, Cesta básica..." />
+        </div>
+
+        <div class="flex items-center justify-between gap-3">
+          <button type="button" id="btnAddLetter" class="rounded-xl bg-neutral-200 px-4 py-2 text-sm font-medium hover:bg-neutral-300">Adicionar letra</button>
+          <button type="submit" class="rounded-xl bg-indigo-600 px-4 py-2 text-white font-semibold shadow hover:bg-indigo-700">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bingo Overlay -->
+  <div id="bingoOverlay" class="fixed inset-0 hidden items-center justify-center bg-black/80 z-50">
+    <h1 class="text-[min(25vw,25vh)] font-extrabold text-yellow-400 animate-bounce text-center w-full">BINGO!</h1>
+  </div>
+
+  <script>
+    document.querySelectorAll('.control-btn').forEach(btn => {
+      btn.classList.add('size-10','grid','place-items-center','rounded-xl','border','border-neutral-300','bg-white','font-bold','shadow-sm','hover:bg-neutral-100','active:scale-95','transition');
+    });
+
+    const LS_KEYS = { config:'bingo.config', history:'bingo.history', redo:'bingo.redo', order:'bingo.order', prize:'bingo.prize', type:'bingo.type' };
+    const DEFAULT_CONFIG = [
+      { letter:'B', start:1, end:15 },
+      { letter:'I', start:16, end:30 },
+      { letter:'N', start:31, end:45 },
+      { letter:'G', start:46, end:60 },
+      { letter:'O', start:61, end:75 }
+    ];
+
+    function save(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+    function load(k,f){ try { return JSON.parse(localStorage.getItem(k)) ?? f; } catch { return f; } }
+
+    let config = load(LS_KEYS.config, DEFAULT_CONFIG);
+    let history = load(LS_KEYS.history, []);
+    let redoStack = load(LS_KEYS.redo, []);
+    let orderByCall = load(LS_KEYS.order, true);
+    let prize = load(LS_KEYS.prize, "—");
+    let gameType = load(LS_KEYS.type, "CARTELA CHEIA");
+
+    const els = {
+      board: document.getElementById('board'),
+      lastCalled: document.getElementById('lastCalled'),
+      numberInput: document.getElementById('numberInput'),
+      btnUndo: document.getElementById('btnUndo'),
+      btnRedo: document.getElementById('btnRedo'),
+      btnClear: document.getElementById('btnClear'),
+      btnConfig: document.getElementById('btnConfig'),
+      btnBingo: document.getElementById('btnBingo'),
+      settingsModal: document.getElementById('settingsModal'),
+      closeSettings: document.getElementById('closeSettings'),
+      settingsForm: document.getElementById('settingsForm'),
+      letterGrid: document.getElementById('letterGrid'),
+      btnAddLetter: document.getElementById('btnAddLetter'),
+      bingoOverlay: document.getElementById('bingoOverlay'),
+      orderCheckbox: document.getElementById('orderCheckbox'),
+      message: document.getElementById('message'),
+      prizeDisplay: document.getElementById('prizeDisplay'),
+      prizeInput: document.getElementById('prizeInput'),
+      gameTypeSelect: document.getElementById('gameTypeSelect'),
+      gameTypeDisplay: document.getElementById('gameTypeDisplay')
+    };
+
+    els.prizeDisplay.textContent = prize;
+    els.prizeInput.value = prize !== "—" ? prize : "";
+    els.gameTypeSelect.value = gameType;
+    els.gameTypeDisplay.textContent = gameType;
+
+    function inRange(n,a,b){ return n>=a && n<=b; }
+    function last(){ return history.length?history[history.length-1]:null; }
+
+    function badge(num,isLast){
+      const span=document.createElement('span');
+      span.textContent=String(num).padStart(2,'0');
+      span.className='text-4xl font-extrabold text-black text-center';
+      if(isLast) span.classList.add('underline','decoration-indigo-500');
+      return span;
+    }
+
+    function showMessage(msg){
+      els.message.textContent = msg;
+      els.message.style.opacity = 1;
+      setTimeout(()=>{ els.message.style.opacity = 0; }, 2000);
+    }
+
+    function refreshColumns(){
+      config.slice(0,5).forEach((lr,idx)=>{
+        const col=document.getElementById(`col-${idx}`);
+        if(!col) return;
+        col.innerHTML='';
+        let bucket=history.filter(n=>inRange(n,lr.start,lr.end));
+        if(!orderByCall){ bucket=bucket.sort((a,b)=>a-b); }
+        bucket.forEach(n=>col.appendChild(badge(n,n===last())));
+      });
+      els.lastCalled.textContent=last() ? String(last()).padStart(2,'0') : '—';
+      els.btnUndo.disabled=history.length===0;
+      els.btnRedo.disabled=redoStack.length===0;
+    }
+
+    function renderBoard(){
+      els.board.innerHTML='';
+      const cols=Math.min(5,Math.max(1,config.length));
+      const grid=document.createElement('div');
+      grid.className='grid gap-3 w-full';
+      grid.style.gridTemplateColumns=`repeat(${cols},minmax(0,1fr))`;
+      config.slice(0,5).forEach((lr,idx)=>{
+        const cell=document.createElement('div');
+        cell.className='rounded-xl border border-neutral-300 bg-white p-4 text-center shadow-sm flex flex-col items-center';
+        cell.innerHTML=`<div class="text-5xl font-extrabold">${lr.letter}</div>
+                        <div class="mt-1 text-lg opacity-70">${lr.start}–${lr.end}</div>
+                        <div id="col-${idx}" class="mt-4 grid grid-cols-4 gap-2 justify-center w-full max-h-64 overflow-y-auto"></div>`;
+        grid.appendChild(cell);
+      });
+      els.board.appendChild(grid);
+      refreshColumns();
+    }
+
+    function resetInput(){ els.numberInput.value=''; els.numberInput.focus(); }
+    function commitNumber(){
+      const n=Number(els.numberInput.value.trim());
+      if(!Number.isInteger(n)) { showMessage('Digite um número válido'); resetInput(); return; }
+      if(config.findIndex(lr=>inRange(n,lr.start,lr.end))===-1) { showMessage('Número fora dos limites'); resetInput(); return; }
+      if(history.includes(n)) { showMessage('Número já chamado'); resetInput(); return; }
+      history.push(n); save(LS_KEYS.history,history);
+      redoStack=[]; save(LS_KEYS.redo,redoStack);
+      refreshColumns(); resetInput();
+    }
+    els.numberInput.addEventListener('keydown',(e)=>{ if(e.key==='Enter'){ e.preventDefault(); commitNumber(); } });
+
+    els.btnUndo.addEventListener('click',()=>{
+      if(history.length===0) return;
+      const n=history.pop(); redoStack.push(n);
+      save(LS_KEYS.history,history); save(LS_KEYS.redo,redoStack);
+      refreshColumns();
+    });
+
+    els.btnRedo.addEventListener('click',()=>{
+      if(redoStack.length===0) return;
+      const n=redoStack.pop(); history.push(n);
+      save(LS_KEYS.history,history); save(LS_KEYS.redo,redoStack);
+      refreshColumns();
+    });
+
+    els.btnClear.addEventListener('click',()=>{
+      if(confirm('Tem certeza que deseja LIMPAR toda a partida?')){
+        history=[]; redoStack=[];
+        save(LS_KEYS.history,history); save(LS_KEYS.redo,redoStack);
+        refreshColumns();
+        els.numberInput.focus();
+      }
+    });
+
+    els.btnConfig.addEventListener('click',()=>{ renderSettingsRows(); els.settingsModal.classList.remove('hidden'); });
+    els.closeSettings.addEventListener('click',()=>els.settingsModal.classList.add('hidden'));
+
+    function addLetterRow(letter='',start='',end=''){
+      const row=document.createElement('div');
+      row.className='flex flex-col gap-2 rounded-xl border border-neutral-200 p-3 bg-white';
+      row.innerHTML=`<div class="flex items-center justify-between">
+                        <label class="text-lg font-semibold">Letra</label>
+                        <button type="button" class="remove-row text-xs rounded bg-neutral-200 px-2 py-1 hover:bg-neutral-300">remover</button>
+                      </div>
+                      <input type="text" maxlength="1" value="${letter}" class="letter w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xl font-extrabold text-center uppercase shadow-sm focus:ring-2 focus:ring-indigo-500" placeholder="A" />
+                      <div class="grid grid-cols-2 gap-3">
+                        <div>
+                          <label class="text-sm opacity-70">Início</label>
+                          <input type="number" class="start mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xl text-center shadow-sm focus:ring-2 focus:ring-indigo-500 min-w-[80px]" value="${start}" />
+                        </div>
+                        <div>
+                          <label class="text-sm opacity-70">Fim</label>
+                          <input type="number" class="end mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xl text-center shadow-sm focus:ring-2 focus:ring-indigo-500 min-w-[80px]" value="${end}" />
+                        </div>
+                      </div>`;
+      els.letterGrid.appendChild(row);
+      row.querySelector('.remove-row').addEventListener('click',()=>row.remove());
+    }
+
+    function renderSettingsRows(){ els.letterGrid.innerHTML=''; config.slice(0,5).forEach(lr=>addLetterRow(lr.letter,lr.start,lr.end)); }
+
+    document.querySelectorAll('.preset').forEach(btn=>btn.addEventListener('click',()=>{
+      const word=btn.getAttribute('data-word');
+      const ranges=[[1,15],[16,30],[31,45],[46,60],[61,75]];
+      config=word.split('').slice(0,5).map((ch,i)=>({letter:ch,start:ranges[i][0],end:ranges[i][1]}));
+      save(LS_KEYS.config,config); renderSettingsRows();
+    }));
+
+    els.settingsForm.addEventListener('submit',e=>{
+      e.preventDefault();
+      const next=[]; els.letterGrid.querySelectorAll(':scope > div').forEach(row=>{
+        const letter=row.querySelector('.letter').value.trim().toUpperCase();
+        const start=Number(row.querySelector('.start').value);
+        const end=Number(row.querySelector('.end').value);
+        if(!letter||!Number.isFinite(start)||!Number.isFinite(end)) return;
+        next.push({letter,start,end});
+      });
+      config=next.slice(0,5); save(LS_KEYS.config,config);
+      orderByCall=els.orderCheckbox.checked; save(LS_KEYS.order,orderByCall);
+
+      prize = els.prizeInput.value.trim() || "—";
+      gameType = els.gameTypeSelect.value;
+      save(LS_KEYS.prize, prize);
+      save(LS_KEYS.type, gameType);
+
+      els.prizeDisplay.textContent = prize;
+      els.gameTypeDisplay.textContent = gameType;
+
+      renderBoard(); els.settingsModal.classList.add('hidden');
+      els.numberInput.focus();
+    });
+
+    els.btnBingo.addEventListener('click',()=>{
+      els.bingoOverlay.classList.remove('hidden');
+      for(let i=0;i<30;i++){
+        const fw=document.createElement('div');
+        fw.className='firework';
+        fw.style.left=Math.random()*innerWidth+'px';
+        fw.style.top=(innerHeight*0.6)+'px';
+        document.body.appendChild(fw);
+        setTimeout(()=>fw.remove(),1000);
+      }
+      setTimeout(()=>{
+        els.bingoOverlay.classList.add('hidden');
+        els.btnClear.focus();
+      },3000);
+    });
+
+    renderBoard();
+  </script>
+</body>
+</html>
